@@ -39,8 +39,9 @@ export async function signWithWalletConnect(
     chainId: pactCommand.publicMeta.chainId,
     gasLimit: pactCommand.publicMeta.gasLimit,
     gasPrice: pactCommand.publicMeta.gasPrice,
-    sender: pactCommand.publicMeta.sender,
     ttl: pactCommand.publicMeta.ttl,
+    sender: pactCommand.publicMeta.sender,
+    nonce: 'test-nonce',
   };
 
   const transactionRequest = {

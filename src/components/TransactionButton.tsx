@@ -1,10 +1,17 @@
 import { useWalletConnectClient } from '@/providers/ClientContextProvider';
-import { signWithWalletConnect } from '@/utils/signWithWalletConnect';
-import { IAccount, ISigningRequest } from '@/types';
+import { IAccount } from '@/types';
 import { useState } from 'react';
-import { IPactCommand, PactCommand } from '@kadena/client';
 import { onlyKey } from '@/utils/onlyKey';
-import { apiHost } from '@/utils/apiHost';
+import {
+  addCapability,
+  buildCommand,
+  setDomain,
+  setMeta,
+  setNetworkId,
+  signWithWalletConnect,
+  localRaw,
+} from '@/pact/pact';
+import { setTransactionCommand } from '@/pact/coin';
 
 export const TransactionButton = ({
   selectedAccount,
@@ -37,47 +44,32 @@ export const TransactionButton = ({
       throw new Error('No amount set');
     }
 
-    const pactDecimal = { decimal: `${amount}` };
+    const command = await buildCommand(
+      setTransactionCommand(selectedAccount.account, toAccount, amount),
+      setMeta({
+        chainId: selectedAccount.chainId,
+        gasLimit: 1000,
+        gasPrice: 1.0e-6,
+        ttl: 10 * 60,
+        sender: selectedAccount.account,
+      }),
+      setNetworkId(selectedAccount.network),
+      setDomain('https://api.testnet.chainweb.com'),
+      addCapability({
+        name: 'coin.TRANSFER',
+        args: [selectedAccount.account, toAccount, amount],
+        signer: onlyKey(selectedAccount.account),
+      }),
+      addCapability({
+        name: 'coin.GAS',
+        args: [],
+        signer: onlyKey(selectedAccount.account),
+      }),
+      signWithWalletConnect(client, session),
+      localRaw({ preflight: true, signatureValidation: false }),
+    )({});
 
-    const pactCommand = new PactCommand();
-    pactCommand.code = `(coin.transfer "${
-      selectedAccount.account
-    }" "${toAccount}" ${amount.toFixed(6)})`;
-    pactCommand
-      .setMeta(
-        {
-          chainId: selectedAccount.chainId,
-          gasLimit: 1000,
-          gasPrice: 1.0e-6,
-          ttl: 10 * 60,
-          sender: selectedAccount.account,
-        },
-        selectedAccount.network as IPactCommand['networkId'],
-      )
-      .addCap('coin.GAS', onlyKey(selectedAccount.account))
-      .addCap<any>( // @TODO remove any when @kadena/client is updated
-        'coin.TRANSFER',
-        onlyKey(selectedAccount.account), // pubKey of sender
-        selectedAccount.account, // account of sender
-        toAccount, // account of receiver
-        pactDecimal, // amount
-      );
-
-    const signedPactCommand = await signWithWalletConnect(
-      client,
-      session,
-      pactCommand,
-      onlyKey(selectedAccount.account),
-    );
-
-    console.log(signedPactCommand);
-
-    const result = await signedPactCommand.local(
-      apiHost(pactCommand.publicMeta.chainId, pactCommand.networkId),
-      // { signatureVerification: false },
-    );
-
-    console.log('signWithWalletConnect result:', result);
+    console.log(command);
   };
 
   return (
